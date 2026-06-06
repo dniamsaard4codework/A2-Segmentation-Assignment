@@ -1,0 +1,6 @@
+{
+  "yolov3_pretrained_map50": 0.6017,
+  "yolov3_pretrained_eval_images": 1000,
+  "yolov4_pretrained_map50": 0.6927,
+  "yolov4_pretrained_eval_images": 1000
+}
