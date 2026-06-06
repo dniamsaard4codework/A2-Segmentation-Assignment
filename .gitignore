@@ -216,3 +216,21 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ── A2 project artifacts (large binaries / datasets / generated) ──────────────
+# Datasets (auto-downloaded by run.py)
+data/coco/
+data/oxford-iiit-pet/
+data/*.zip
+# Pretrained + trained weights (downloaded / produced by training)
+weights/
+checkpoints/
+*.pt
+*.weights
+yolov4.conv.137
+# Logs
+*.log
+# Keep cfg, coco.names, results figures, notebooks tracked:
+!cfg/*.cfg
+!data/coco.names
+!results/*.png

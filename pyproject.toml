@@ -1,0 +1,37 @@
+[project]
+name = "a2-detection-segmentation"
+version = "0.1.0"
+description = "A2 — Object Detection (YOLOv4) & Image Segmentation (U-Net/ResNet-18)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "torch>=2.7",
+    "torchvision>=0.22",
+    "numpy",
+    "pandas",
+    "scipy",
+    "pillow",
+    "matplotlib",
+    "tqdm",
+    "opencv-python",
+    "albumentations",
+    "pycocotools",
+    "torchmetrics>=1.4",
+    "jupyter",
+    "nbconvert",
+    "ipykernel",
+    "requests",
+]
+
+# ── PyTorch with CUDA 12.8 (cu128) wheels ─────────────────────────────────────
+# Required for the RTX 5060 Ti (Blackwell, compute capability sm_120). The
+# default PyPI wheels (CPU / older CUDA) do NOT ship sm_120 kernels and fail at
+# runtime with "no kernel image is available for execution on the device".
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
