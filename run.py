@@ -31,6 +31,16 @@ DET_MODELS = {"yolov3", "yolov4"}
 SEG_MODELS = {"unet_resnet18", "unet_resnet18_no_skip"}
 
 
+def resolve_weights(path):
+    """Allow the brief's bare names (e.g. ``yolov4.weights``) to resolve to the
+    ``weights/`` directory if not found as given."""
+    if path and not os.path.exists(path):
+        for alt in (os.path.join("weights", path), os.path.join("weights", os.path.basename(path))):
+            if os.path.exists(alt):
+                return alt
+    return path
+
+
 def record_metric(key, value, path="results/metrics.json"):
     """Persist a scalar result so the notebooks / README can read real numbers."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -83,8 +93,9 @@ def draw_detections(img_path, output, inp_dim, names, save_path):
 def detection_infer(args, device):
     from detection.util import prep_image, write_results, COCO_NAMES, load_classes
     net = _build_darknet(args.model, args.img_size, device).eval()
-    n = net.load_weights(args.weights)
-    print(f"Loaded {n} conv layers from {args.weights}")
+    weights = resolve_weights(args.weights)
+    n = net.load_weights(weights)
+    print(f"Loaded {n} conv layers from {weights}")
     names = load_classes("data/coco.names") if os.path.exists("data/coco.names") else COCO_NAMES
 
     inp = prep_image(args.image, args.img_size).to(device)
@@ -139,7 +150,7 @@ def detection_evaluate(args, device):
     from detection.train import compute_map
     net = _build_darknet(args.model, args.img_size, device).eval()
     if args.weights:
-        net.load_weights(args.weights)
+        net.load_weights(resolve_weights(args.weights))
     _, val_loader = _coco_loaders(args)
     n_eval = args.limit or len(val_loader.dataset)
     m = compute_map(net, val_loader, device, args.img_size, max_images=args.limit)
@@ -170,8 +181,9 @@ def segmentation_evaluate(args, device):
     _, test_loader, *_ = get_pet_loaders("data", batch_size=args.batch_size,
                                          num_workers=args.num_workers)
     model = build_segmentation_model(args.model).to(device)
-    if args.weights and os.path.exists(args.weights):
-        model.load_state_dict(torch.load(args.weights, map_location=device))
+    weights = resolve_weights(args.weights) if args.weights else None
+    if weights and os.path.exists(weights):
+        model.load_state_dict(torch.load(weights, map_location=device))
     miou, pc = evaluate_segmentation(model, test_loader, device)
     print(f"Val mIoU ({args.model}): {miou:.4f}  | per-class IoU "
           f"Pet={pc[0]:.3f} Background={pc[1]:.3f} Border={pc[2]:.3f}")
