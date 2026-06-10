@@ -224,13 +224,17 @@ data/oxford-iiit-pet/
 data/*.zip
 # Pretrained + trained weights (downloaded / produced by training)
 weights/
-checkpoints/
+# Ignore everything in checkpoints/ EXCEPT the small history JSONs (below)
+checkpoints/*
 *.pt
 *.weights
 yolov4.conv.137
 # Logs
 *.log
-# Keep cfg, coco.names, results figures, notebooks tracked:
+# Internal tooling — NOT part of the submission (the notebooks are committed pre-built)
+build_notebooks.py
+# Keep cfg, coco.names, results figures, notebooks, and history JSONs tracked:
 !cfg/*.cfg
 !data/coco.names
 !results/*.png
+!checkpoints/*.json

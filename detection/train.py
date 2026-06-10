@@ -19,16 +19,23 @@ from .losses import compute_yolo_loss
 
 @torch.no_grad()
 def compute_map(model, loader, device, img_size, conf_thresh=0.05, nms_thresh=0.45,
-                num_classes=80, max_images=None, pre_nms_topk=2000):
-    """mAP@0.5 over ``loader`` using torchmetrics + per-image NMS (cap 100 dets).
+                num_classes=80, max_images=None, pre_nms_topk=2000, coco_range=False):
+    """mAP over ``loader`` using torchmetrics + per-image NMS (cap 100 dets).
 
     NMS runs on-device after a top-k score cap so the ~22k raw anchors don't
     bottleneck evaluation when the model is still under-confident.
+
+    ``coco_range=False`` (default) evaluates a single IoU threshold and returns
+    the scalar **mAP@0.5** (used for the fast per-epoch readout). ``coco_range=True``
+    evaluates the full COCO IoU sweep (0.50:0.05:0.95) and returns the tuple
+    ``(mAP@[0.5:0.95], mAP@0.5)`` — the standard COCO primary metric plus the 0.5
+    slice, computed in one pass.
     """
     from torchmetrics.detection import MeanAveragePrecision
     from torchvision.ops import nms as tv_nms
 
-    metric = MeanAveragePrecision(iou_type="bbox", iou_thresholds=[0.5])
+    metric = MeanAveragePrecision(iou_type="bbox",
+                                  iou_thresholds=None if coco_range else [0.5])
     model.eval()
     seen = 0
     for imgs, labels in loader:
@@ -76,8 +83,9 @@ def compute_map(model, loader, device, img_size, conf_thresh=0.05, nms_thresh=0.
             break
 
     res = metric.compute()
-    val = float(res["map"].item())
-    return max(val, 0.0)
+    if coco_range:
+        return max(float(res["map"]), 0.0), max(float(res["map_50"]), 0.0)
+    return max(float(res["map"]), 0.0)
 
 
 def train_yolo(model, train_loader, val_loader, device, img_size, epochs,

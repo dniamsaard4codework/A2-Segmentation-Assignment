@@ -22,6 +22,7 @@ from one script, exactly matching the command lines in the assignment brief::
 import argparse
 import json
 import os
+import random
 
 import cv2
 import numpy as np
@@ -29,6 +30,23 @@ import torch
 
 DET_MODELS = {"yolov3", "yolov4"}
 SEG_MODELS = {"unet_resnet18", "unet_resnet18_no_skip"}
+
+
+def set_seed(seed=42):
+    """Seed Python / NumPy / PyTorch for reproducible runs.
+
+    Determinism is exact for the default ``num_workers=0`` single-process path
+    (the same one the notebooks use); with multiple data-loader workers or
+    non-deterministic CUDA kernels small run-to-run variation can remain. The
+    notebooks define an identical ``set_seed`` and reseed right before each
+    train, so a from-scratch notebook run and ``run.py`` consume the RNG in the
+    same order and produce the same numbers."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
 def resolve_weights(path):
@@ -153,9 +171,12 @@ def detection_evaluate(args, device):
         net.load_weights(resolve_weights(args.weights))
     _, val_loader = _coco_loaders(args)
     n_eval = args.limit or len(val_loader.dataset)
-    m = compute_map(net, val_loader, device, args.img_size, max_images=args.limit)
-    print(f"mAP@0.5 ({args.model}, {n_eval} val images): {m:.4f}")
-    record_metric(f"{args.model}_pretrained_map50", round(m, 4))
+    m5095, m50 = compute_map(net, val_loader, device, args.img_size,
+                             max_images=args.limit, coco_range=True)
+    print(f"mAP@0.5 ({args.model}, {n_eval} val images): {m50:.4f} | "
+          f"mAP@[0.5:0.95]: {m5095:.4f}")
+    record_metric(f"{args.model}_pretrained_map50", round(m50, 4))
+    record_metric(f"{args.model}_pretrained_map5095", round(m5095, 4))
     record_metric(f"{args.model}_pretrained_eval_images", n_eval)
 
 
@@ -211,6 +232,7 @@ def main():
     p.add_argument("--conf", type=float, default=0.5)
     p.add_argument("--nms", type=float, default=0.4)
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    p.add_argument("--seed", type=int, default=42, help="RNG seed for reproducible runs")
     p.add_argument("--train", action="store_true")
     p.add_argument("--evaluate", action="store_true")
     p.add_argument("--infer", action="store_true")
@@ -225,7 +247,8 @@ def main():
     if args.lr is None:
         args.lr = 1e-3
     device = torch.device(args.device)
-    print(f"Device: {device} | model: {args.model}")
+    set_seed(args.seed)
+    print(f"Device: {device} | model: {args.model} | seed: {args.seed}")
 
     if args.infer:
         assert is_det, "--infer is for detection models"

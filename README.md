@@ -7,7 +7,9 @@ Two parts, both reproducible end-to-end on a single GPU:
 - **A2-01 Object Detection** — extend the YOLOv3 Darknet→PyTorch parser to **YOLOv4** (Mish, maxpool/SPP, multi-layer & grouped routes, `scale_x_y`), load `yolov4.weights`, run 608×608 RGB inference, then train YOLOv4 on COCO and compare **MSE/IoU vs CIoU** loss.
 - **A2-02 Image Segmentation** — train two **U-Net + ResNet-18** variants (skip vs no-skip, same ImageNet encoder) on Oxford-IIIT Pet and measure the effect of skip connections.
 
-Full write-ups with all figures are in [notebooks/A2-01-Object-Detection.ipynb](notebooks/A2-01-Object-Detection.ipynb) and [notebooks/A2-02-Image-Segmentation.ipynb](notebooks/A2-02-Image-Segmentation.ipynb).
+> **Note — one repository, two lab exercises.** This assignment combines **two separate lab notebooks** from [lab_note/](lab_note/) — `A2-01-Object-Detection` and `A2-02-Image-Segmentation` — and each lab specifies its *own* submission with a training script named `run.py`. Because both exercises require the **same `run.py` filename**, the [run.py](run.py) provided here is a **single unified script that serves both exercises**: it dispatches by `--model` (`yolov3`/`yolov4` → object detection, `unet_resnet18`/`unet_resnet18_no_skip` → segmentation), so every command listed for both exercises below runs against this one file. The two graded write-ups remain separate, one notebook per exercise.
+
+Full write-ups are in [notebooks/A2-01-Object-Detection.ipynb](notebooks/A2-01-Object-Detection.ipynb) and [notebooks/A2-02-Image-Segmentation.ipynb](notebooks/A2-02-Image-Segmentation.ipynb). Each notebook is **fully self-contained** — all model/dataset/training code is inlined (no imports from `detection/` or `segmentation/`) and the cells run the same experiment end-to-end and plot results inline. Re-runs reuse cached `checkpoints/` (idempotent); datasets/weights auto-download on first use. Runs are **seeded** (`run.py --seed`, default 42; the notebooks reseed before each train with the same logic), so a from-scratch notebook run and `run.py` consume the RNG in the same order and produce the same numbers (exact for the default `num_workers=0` path).
 
 ---
 
@@ -67,23 +69,25 @@ python run.py --model yolov4 --dataset coco --epochs 10 --loss ciou --train
 
 ### Results
 
-| Model | Dataset | mAP@0.5 | Time/epoch | Notes |
-|---|---|---|---|---|
-| YOLOv3 (pretrained) | COCO val2017 (1000) | **0.602** | — | inference only |
-| YOLOv4 (pretrained) | COCO val2017 (1000) | **0.693** | — | validates the reimplementation |
-| YOLOv4 (MSE/IoU loss) | COCO val2017 (4000/1000) | 0.0006 | ~239 s | trained from scratch (head); ImageNet backbone; 10 ep |
-| YOLOv4 (CIoU loss) | COCO val2017 (4000/1000) | 0.0017 | ~235 s | loss comparison; same setup |
+| Model | Dataset | mAP@0.5 | mAP@[0.5:0.95] | Time/epoch | Notes |
+|---|---|---|---|---|---|
+| YOLOv3 (pretrained) | COCO val2017 (1000) | **0.602** | **0.350** | — | inference only |
+| YOLOv4 (pretrained) | COCO val2017 (1000) | **0.693** | **0.472** | — | validates the reimplementation |
+| YOLOv4 (MSE/IoU loss) | COCO val2017 (4000/1000) | 0.0004 | 0.0001 | ~233 s | trained head; ImageNet backbone; 10 ep |
+| YOLOv4 (CIoU loss) | COCO val2017 (4000/1000) | 0.0008 | 0.0003 | ~238 s | loss comparison; same setup |
+
+*(mAP@[0.5:0.95] is the COCO-primary metric averaged over IoU 0.50:0.05:0.95; mAP@0.5 is the single-threshold PASCAL-VOC metric. Both are evaluation-only — computed on the existing weights, no retraining.)*
 
 **MSE/IoU vs CIoU (Exercise 2e):**
 
-| Loss | mAP@0.5 (best) |
-|---|---|
-| MSE / IoU loss | 0.0006 |
-| CIoU loss | **0.0017** (≈2.8×) |
+| Loss | mAP@0.5 | mAP@[0.5:0.95] | final box loss |
+|---|---|---|---|
+| MSE / IoU loss | 0.0004 | 0.0001 | 0.026 |
+| CIoU loss | 0.0008 | 0.0003 | 1.16 |
 
 ![MSE vs CIoU](results/det_loss_comparison.png)
 
-*The trained-from-scratch mAP is small **by design** — a detection head trained from an ImageNet backbone on the 4 000-image val split for 10 epochs cannot match the paper's 118k images × ~300 epochs (the lab explicitly expects near-zero mAP here). What matters for the exercise: the loss **decreases every epoch** (MSE total 1.06→0.25, CIoU 3.20→1.51 — the model is learning), and **CIoU reaches ≈2.8× the MSE run's mAP**, confirming its joint overlap/centre/aspect-ratio objective localises better than coordinate MSE. The pretrained-weights mAP (0.693) is the correctness reference for the reimplementation.*
+*The trained-from-scratch mAP is at the **noise floor** at both IoU ranges (~0.000x) **by design** — a detection head trained from an ImageNet backbone on the 4 000-image val split for 10 epochs cannot approach the paper's 118k images × ~300 epochs (the lab explicitly expects near-zero mAP here), and at this magnitude the MSE-vs-CIoU mAP ordering is not statistically meaningful and shifts run to run. The **trustworthy** evidence that training works is the **loss decreasing every epoch** (MSE total 1.09→0.25, CIoU 3.22→1.51), and the box-loss convergence; the **pretrained-weights mAP (0.693 @0.5, 0.472 @[0.5:0.95]) is the correctness reference** for the reimplementation, validated by the same `compute_map` that reports the near-zero from-scratch numbers.*
 
 Pretrained YOLOv4 at 608 RGB correctly detects **dog / bicycle / truck** on the canonical image:
 
@@ -95,7 +99,7 @@ Faster R-CNN is **two-stage**: a Region Proposal Network first emits ~1–2k can
 
 ### Discussion
 
-Replacing the coordinate MSE with CIoU was the single change between the two runs, and it clearly helped: CIoU reached ≈2.8× the MSE run's best mAP@0.5 (0.0017 vs 0.0006). The reason is that CIoU optimises overlap, centre distance and aspect ratio jointly, whereas MSE regresses x/y/w/h independently and is blind to IoU, so CIoU localises boxes better even with the same backbone, schedule and objectness/class terms. The main challenges training on COCO were the extreme foreground/background imbalance (~22k background vs ~40 positive anchors per image, which forced per-term mean-normalised losses so objectness wouldn't swamp the gradient) and the memory cost of full YOLOv4 at 608² on 16 GB (handled with bf16 AMP + gradient accumulation). Absolute mAP stays small because a detection head trained on only the 4k-image val split for 10 epochs cannot approach the paper's 118k images × ~300 epochs — so the pretrained-weights mAP (0.693) is the correctness check, while the from-scratch runs show clear learning (loss 1.06→0.25 for MSE, 3.20→1.51 for CIoU).
+Both from-scratch runs sit at the mAP **noise floor** (~0.000x at both IoU 0.5 and 0.5:0.95), so the MSE-vs-CIoU mAP ordering is not statistically meaningful and shifts run to run. The trustworthy effect of swapping the loss is on optimisation: every term decreases monotonically (MSE total 1.09→0.25, CIoU 3.22→1.51), and CIoU is the stronger box objective in principle because it optimises overlap, centre distance and aspect ratio jointly rather than regressing x/y/w/h independently. The main challenges on COCO were the extreme foreground/background imbalance (~22k background vs ~40 positive anchors per image), which forced per-term mean-normalised losses so objectness wouldn't swamp the gradient, and fitting full YOLOv4 at 608² into 16 GB (bf16 AMP + gradient accumulation). Absolute mAP stays near zero **by design** — 4 000 images × 10 epochs cannot approach the paper's 118k × ~300 — so the **pretrained-weights mAP (0.693 @0.5, 0.472 @[0.5:0.95]) is the correctness reference**, validated by the same evaluator that reports the near-zero from-scratch numbers.
 
 ---
 
@@ -115,8 +119,10 @@ python run.py --model unet_resnet18 --weights unet_resnet18_pet.pt --dataset oxf
 
 | Model | Encoder | Skip connections | Val mIoU | Time/epoch |
 |---|---|---|---|---|
-| `unet_resnet18` | ResNet-18 (ImageNet) | ✅ | **0.759** | ~18.2 s |
-| `unet_resnet18_no_skip` | ResNet-18 (ImageNet) | ❌ | **0.690** | ~16.5 s |
+| `unet_resnet18` | ResNet-18 (ImageNet) | ✅ | **0.750** | ~18.9 s |
+| `unet_resnet18_no_skip` | ResNet-18 (ImageNet) | ❌ | **0.687** | ~16.3 s |
+
+*(Val mIoU is the final-epoch value of the saved checkpoint — what `run.py … --evaluate` reproduces.)*
 
 ![skip vs no-skip](results/seg_curves.png)
 
@@ -130,7 +136,7 @@ The **first** skip (64-channel, H/2, highest resolution). It is the only path ca
 
 ### Discussion
 
-Skip connections improved Val mIoU from **0.690** (no-skip) to **0.759** (skip) — a **+0.069** gain (≈10% relative) for an otherwise identical encoder and decoder — and the side-by-side predictions show the gain is concentrated at object **boundaries**: the no-skip decoder produces rounded, leaky masks because it must reconstruct fine edges from a coarse bottleneck. **Choose U-Net** for dense per-pixel labels of one/few classes where instances need not be separated (medical organ/tumour masks, road-scene "stuff"), especially with limited data + a pretrained encoder. **Choose Mask R-CNN** when you must detect, separate and count individual object **instances** (this cat vs that cat) and also want boxes + labels, accepting its heavier two-stage cost.
+Skip connections improved Val mIoU from **0.687** (no-skip) to **0.750** (skip) — a **+0.063** gain for an otherwise identical encoder and decoder — and the side-by-side predictions show the gain is concentrated at object **boundaries**, where the no-skip decoder produces rounded, leaky masks because it must reconstruct fine edges from a coarse bottleneck. **Choose U-Net** for dense per-pixel labels of one or a few classes where instances need not be separated (medical organ/tumour masks, road-scene "stuff"), especially with limited data and a pretrained encoder. **Choose Mask R-CNN** when you must detect, separate and count individual object **instances** (this cat vs that cat) and also want boxes and labels, accepting its heavier two-stage cost.
 
 ---
 

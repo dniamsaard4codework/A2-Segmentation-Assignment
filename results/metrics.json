@@ -3,5 +3,12 @@
   "yolov3_pretrained_eval_images": 1000,
   "yolov4_pretrained_map50": 0.6927,
   "yolov4_pretrained_eval_images": 1000,
-  "unet_resnet18_miou": 0.7539
+  "unet_resnet18_miou": 0.7504,
+  "unet_resnet18_no_skip_miou": 0.6873,
+  "yolov4_pretrained_map5095": 0.4723,
+  "yolov3_pretrained_map5095": 0.3505,
+  "yolov4_mse_trained_map50": 0.0004,
+  "yolov4_mse_trained_map5095": 0.0001,
+  "yolov4_ciou_trained_map50": 0.0008,
+  "yolov4_ciou_trained_map5095": 0.0003
 }
